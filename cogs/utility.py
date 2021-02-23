@@ -3,6 +3,7 @@ import inspect
 import os
 import random
 import re
+from sys import stdout
 import traceback
 from contextlib import redirect_stdout
 from datetime import datetime
@@ -344,7 +345,7 @@ class Utility(commands.Cog):
         embed.add_field(
             name="Want Modmail in Your Server?",
             value="Follow the installation guide on [GitHub](https://github.com/kyb3r/modmail/) "
-            "and join our [Discord server](https://discord.gg/F34cRU8/)!",
+            "and join our [Discord server](https://discord.gg/F34cRU8)!",
             inline=False,
         )
 
@@ -440,7 +441,7 @@ class Utility(commands.Cog):
     async def debug_hastebin(self, ctx):
         """Posts application-logs to Hastebin."""
 
-        haste_url = os.environ.get("HASTE_URL", "https://hasteb.in")
+        haste_url = os.environ.get("HASTE_URL", "https://hastebin.cc")
         log_file_name = self.bot.token.split(".")[0]
 
         with open(
@@ -505,9 +506,13 @@ class Utility(commands.Cog):
             - `streaming`
             - `listening`
             - `watching`
+            - `competing`
 
         When activity type is set to `listening`,
         it must be followed by a "to": "listening to..."
+
+        When activity type is set to `competing`,
+        it must be followed by a "in": "competing in..."
 
         When activity type is set to `streaming`, you can set
         the linked twitch page:
@@ -543,6 +548,8 @@ class Utility(commands.Cog):
         msg = f"Activity set to: {activity.type.name.capitalize()} "
         if activity.type == ActivityType.listening:
             msg += f"to {activity.name}."
+        elif activity.type == ActivityType.competing:
+            msg += f"in {activity.name}."
         else:
             msg += f"{activity.name}."
 
@@ -606,6 +613,11 @@ class Utility(commands.Cog):
             if activity_message.lower().startswith("to "):
                 # The actual message is after listening to [...]
                 # discord automatically add the "to"
+                activity_message = activity_message[3:].strip()
+        elif activity_type == ActivityType.competing:
+            if activity_message.lower().startswith("in "):
+                # The actual message is after listening to [...]
+                # discord automatically add the "in"
                 activity_message = activity_message[3:].strip()
         elif activity_type == ActivityType.streaming:
             url = self.bot.config["twitch_url"]
@@ -891,7 +903,7 @@ class Utility(commands.Cog):
                 embed.add_field(name="Example(s):", value=example_text, inline=False)
 
             note_text = ""
-            for note in info["notes"]:
+            for note in info.get("notes", []):
                 note_text += f"- {fmt(note)}\n"
             if note_text:
                 embed.add_field(name="Note(s):", value=note_text, inline=False)
@@ -1441,15 +1453,15 @@ class Utility(commands.Cog):
                 if perm == -1:
                     values.insert(0, "**everyone**")
                     continue
-                member = ctx.guild.get_member(perm)
+                member = ctx.guild.get_member(int(perm))
                 if member is not None:
                     values.append(member.mention)
                     continue
-                user = self.bot.get_user(perm)
+                user = self.bot.get_user(int(perm))
                 if user is not None:
                     values.append(user.mention)
                     continue
-                role = ctx.guild.get_role(perm)
+                role = ctx.guild.get_role(int(perm))
                 if role is not None:
                     values.append(role.mention)
                 else:
@@ -1495,23 +1507,23 @@ class Utility(commands.Cog):
         """
 
         if name is None and user_or_role not in {"command", "level", "override"}:
-            value = self._verify_user_or_role(user_or_role)
+            value = str(self._verify_user_or_role(user_or_role))
 
             cmds = []
             levels = []
 
             done = set()
+            command_permissions = self.bot.config["command_permissions"]
+            level_permissions = self.bot.config["level_permissions"]
             for command in self.bot.walk_commands():
                 if command not in done:
                     done.add(command)
-                    permissions = self.bot.config["command_permissions"].get(
-                        command.qualified_name, []
-                    )
+                    permissions = command_permissions.get(command.qualified_name, [])
                     if value in permissions:
                         cmds.append(command.qualified_name)
 
             for level in PermissionLevel:
-                permissions = self.bot.config["level_permissions"].get(level.name, [])
+                permissions = level_permissions.get(level.name, [])
                 if value in permissions:
                     levels.append(level.name)
 
@@ -1725,14 +1737,30 @@ class Utility(commands.Cog):
                 description=f"Another autotrigger with the same name already exists: `{keyword}`.",
             )
         else:
-            self.bot.auto_triggers[keyword] = command
-            await self.bot.config.update()
+            # command validation
+            valid = False
+            split_cmd = command.split(" ")
+            for n in range(1, len(split_cmd) + 1):
+                if self.bot.get_command(" ".join(split_cmd[0:n])):
+                    print(self.bot.get_command(" ".join(split_cmd[0:n])))
+                    valid = True
+                    break
 
-            embed = discord.Embed(
-                title="Success",
-                color=self.bot.main_color,
-                description=f"Keyword `{keyword}` has been linked to `{command}`.",
-            )
+            if valid:
+                self.bot.auto_triggers[keyword] = command
+                await self.bot.config.update()
+
+                embed = discord.Embed(
+                    title="Success",
+                    color=self.bot.main_color,
+                    description=f"Keyword `{keyword}` has been linked to `{command}`.",
+                )
+            else:
+                embed = discord.Embed(
+                    title="Error",
+                    color=self.bot.error_color,
+                    description="Invalid command. Note that autotriggers do not work with aliases.",
+                )
 
         await ctx.send(embed=embed)
 
@@ -1745,14 +1773,30 @@ class Utility(commands.Cog):
                 keyword, self.bot.auto_triggers.keys(), "Autotrigger"
             )
         else:
-            self.bot.auto_triggers[keyword] = command
-            await self.bot.config.update()
+            # command validation
+            valid = False
+            split_cmd = command.split(" ")
+            for n in range(1, len(split_cmd) + 1):
+                if self.bot.get_command(" ".join(split_cmd[0:n])):
+                    print(self.bot.get_command(" ".join(split_cmd[0:n])))
+                    valid = True
+                    break
 
-            embed = discord.Embed(
-                title="Success",
-                color=self.bot.main_color,
-                description=f"Keyword `{keyword}` has been linked to `{command}`.",
-            )
+            if valid:
+                self.bot.auto_triggers[keyword] = command
+                await self.bot.config.update()
+
+                embed = discord.Embed(
+                    title="Success",
+                    color=self.bot.main_color,
+                    description=f"Keyword `{keyword}` has been linked to `{command}`.",
+                )
+            else:
+                embed = discord.Embed(
+                    title="Error",
+                    color=self.bot.error_color,
+                    description="Invalid command. Note that autotriggers do not work with aliases.",
+                )
 
         await ctx.send(embed=embed)
 
@@ -1785,7 +1829,7 @@ class Utility(commands.Cog):
         """Tests a string against the current autotrigger setup"""
         for keyword in self.bot.auto_triggers:
             if self.bot.config.get("use_regex_autotrigger"):
-                check = re.match(keyword, text)
+                check = re.search(keyword, text)
                 regex = True
             else:
                 check = keyword.lower() in text.lower()
@@ -1852,6 +1896,7 @@ class Utility(commands.Cog):
     @commands.command()
     @checks.has_permissions(PermissionLevel.OWNER)
     @checks.github_token_required(ignore_if_not_heroku=True)
+    @checks.updates_enabled()
     @trigger_typing
     async def update(self, ctx, *, flag: str = ""):
         """
@@ -1912,18 +1957,33 @@ class Utility(commands.Cog):
                         description="No further updates required",
                         color=self.bot.main_color,
                     )
+                    embed.set_footer(text="Force update")
                     embed.set_author(
                         name=user["username"], icon_url=user["avatar_url"], url=user["url"]
                     )
                 await ctx.send(embed=embed)
             else:
+                # update fork if gh_token exists
+                try:
+                    await self.bot.api.update_repository()
+                except InvalidConfigError:
+                    pass
+
                 command = "git pull"
 
                 proc = await asyncio.create_subprocess_shell(command, stderr=PIPE, stdout=PIPE,)
+                err = await proc.stderr.read()
+                err = err.decode("utf-8").rstrip()
                 res = await proc.stdout.read()
                 res = res.decode("utf-8").rstrip()
 
-                if res != "Already up to date.":
+                if err and not res:
+                    embed = discord.Embed(
+                        title="Update failed", description=err, color=self.bot.error_color
+                    )
+                    await ctx.send(embed=embed)
+
+                elif res != "Already up to date.":
                     logger.info("Bot has been updated.")
 
                     embed = discord.Embed(title="Bot has been updated", color=self.bot.main_color,)
@@ -1945,6 +2005,7 @@ class Utility(commands.Cog):
                     embed = discord.Embed(
                         title="Already up to date", description=desc, color=self.bot.main_color,
                     )
+                    embed.set_footer(text="Force update")
                     await ctx.send(embed=embed)
 
     @commands.command(hidden=True, name="eval")

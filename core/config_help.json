@@ -185,6 +185,28 @@
       "See also: `log_channel_id`"
     ]
   },
+  "update_channel_id": {
+    "default": "Log Channel (normally `#bot-logs`)",
+    "description": "This is the channel where update notifications are sent to.",
+    "examples": [
+      "`{prefix}config set update_channel_id 9234932582312` (9234932582312 is the channel ID)"
+    ],
+    "notes": [
+      "This has no effect unless `disable_autoupdates` is set to no and `update_notifications` is set to yes.",
+      "See also: `log_channel_id`"
+    ]
+  },
+  "update_notifications": {
+    "default": "Yes",
+    "description": "This is the channel where update notifications are sent to.",
+    "examples": [
+      "`{prefix}config set update_notifications no"
+    ],
+    "notes": [
+      "This has no effect unless `disable_autoupdates` is set to no.",
+      "See also: `update_channel_id`"
+    ]
+  },
   "sent_emoji": {
     "default": "✅",
     "description": "This is the emoji added to the message when when a Modmail action is invoked successfully (ie. DM Modmail, edit message, etc.).",
@@ -301,6 +323,17 @@
     "notes": [
       "This is used in place of `thread_self_closable_creation_footer` when `recipient_thread_close` is enabled.",
       "See also: `thread_creation_title`, `thread_creation_response`, `thread_self_closable_creation_footer`, `thread_close_footer`."
+    ]
+  },
+  "thread_contact_silently": {
+    "default": "No",
+    "description": "Setting this configuration will always open a new thread silently in contact.",
+    "examples": [
+      "`{prefix}config set thread_contact_silently yes`",
+      "`{prefix}config set thread_contact_silently no`"
+    ],
+    "notes": [
+      "Works like `{prefix}contact <user> silent` for every new thread."
     ]
   },
   "thread_self_closable_creation_footer": {
@@ -629,12 +662,41 @@
   },
   "alert_on_mention": {
     "default": "No",
-    "description": "Mentions all mods (mention) in logs channel when bot is mentioned",
+    "description": "Mentions all mods (mention) in mention channel when bot is mentioned",
     "examples":[
       "`{prefix}config set alert_on_mention yes`"
     ],
     "notes": [
-      "See also: `mention`"
+      "See also: `mention`, `mention_channel_id`"
+    ]
+  },
+  "silent_alert_on_mention": {
+    "default": "No",
+    "description": "Send a message in the mention channel without mentioning all mods (mention).",
+    "examples":[
+      "`{prefix}config set alert_on_mention yes`"
+    ],
+    "notes": [
+      "This has no effect unless `alert_on_mention` is set to yes.",
+      "See also: `mention`, `mention_channel_id`"
+    ]
+  },
+  "show_timestamp": {
+    "default": "Yes",
+    "description": "Shows timestamps on thread embeds",
+    "examples":[
+      "`{prefix}config set show_timestamp no`"
+    ],
+    "notes": []
+  },
+  "anonymous_snippets": {
+    "default": "No",
+    "description": "Sends snippets anonymously.",
+    "examples":[
+      "`{prefix}config set anonymous_snippets yes`"
+    ],
+    "notes": [
+      "See also: `anon_avatar_url`, `anon_tag`."
     ]
   },
   "confirm_thread_creation": {
@@ -644,7 +706,7 @@
       "`{prefix}config set confirm_thread_creation yes`"
     ],
     "notes": [
-      "See also: `confirm_thread_creation_title`, `confirm_thread_response`, `confirm_thread_creation_accept`, confirm_thread_creation_deny`"
+      "See also: `confirm_thread_creation_title`, `confirm_thread_response`, `confirm_thread_creation_accept`, `confirm_thread_creation_deny``"
     ]
   },
   "confirm_thread_creation_title": {
@@ -654,7 +716,7 @@
       "`{prefix}config set confirm_thread_creation_title Are you sure you want to create a new thread?`"
     ],
     "notes": [
-      "See also: `confirm_thread_creation`, `confirm_thread_response`, `confirm_thread_creation_accept`, confirm_thread_creation_deny`"
+      "See also: `confirm_thread_creation`, `confirm_thread_response`, `confirm_thread_creation_accept`, `confirm_thread_creation_deny`"
     ]
   },
   "confirm_thread_response": {
@@ -664,7 +726,7 @@
       "`{prefix}config set confirm_thread_response React to confirm`"
     ],
     "notes": [
-      "See also: `confirm_thread_creation`, `confirm_thread_creation_title`, `confirm_thread_creation_accept`, confirm_thread_creation_deny`"
+      "See also: `confirm_thread_creation`, `confirm_thread_creation_title`, `confirm_thread_creation_accept`, `confirm_thread_creation_deny`"
     ]
   },
   "confirm_thread_creation_accept": {
@@ -675,7 +737,7 @@
     ],
     "notes": [
       "This has no effect unless `confirm_thread_creation` is set",
-      "See also: `confirm_thread_creation`, `confirm_thread_creation_title`, `confirm_thread_response`, confirm_thread_creation_deny`"
+      "See also: `confirm_thread_creation`, `confirm_thread_creation_title`, `confirm_thread_response`, `confirm_thread_creation_deny`"
     ]
   },
   "confirm_thread_creation_deny": {
@@ -686,7 +748,7 @@
     ],
     "notes": [
       "This has no effect unless `confirm_thread_creation` is set",
-      "See also: `confirm_thread_creation`, `confirm_thread_creation_title`, `confirm_thread_response`, confirm_thread_creation_accept`"
+      "See also: `confirm_thread_creation`, `confirm_thread_creation_title`, `confirm_thread_response`, `confirm_thread_creation_accept`"
     ]
   },
   "use_regex_autotrigger": {
@@ -803,6 +865,15 @@
   "disable_autoupdates": {
     "default": "No",
     "description": "Controls if autoupdates should be disabled or not.",
+    "examples": [
+    ],
+    "notes": [
+      "This configuration can only to be set through `.env` file or environment (config) variables."
+    ]
+  },
+  "disable_updates": {
+    "default": "No",
+    "description": "Controls if the update command should be disabled or not.",
     "examples": [
     ],
     "notes": [

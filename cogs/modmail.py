@@ -1,4 +1,5 @@
 import asyncio
+from operator import truediv
 import re
 from datetime import datetime
 from itertools import zip_longest
@@ -679,7 +680,7 @@ class Modmail(commands.Cog):
             thread = ctx.thread
             if not thread:
                 raise commands.MissingRequiredArgument(SimpleNamespace(name="member"))
-            user = thread.recipient
+            user = thread.recipient or await self.bot.fetch_user(thread.id)
 
         default_avatar = "https://cdn.discordapp.com/embed/avatars/0.png"
         icon_url = getattr(user, "avatar_url", default_avatar)
@@ -835,6 +836,28 @@ class Modmail(commands.Cog):
         async with ctx.typing():
             await ctx.thread.reply(ctx.message)
 
+    @commands.command(aliases=["formatanonreply"])
+    @checks.has_permissions(PermissionLevel.SUPPORTER)
+    @checks.thread_only()
+    async def fareply(self, ctx, *, msg: str = ""):
+        """
+        Anonymously reply to a Modmail thread with variables.
+
+        Works just like `{prefix}areply`, however with the addition of three variables:
+          - `{{channel}}` - the `discord.TextChannel` object
+          - `{{recipient}}` - the `discord.User` object of the recipient
+          - `{{author}}` - the `discord.User` object of the author
+
+        Supports attachments and images as well as
+        automatically embedding image URLs.
+        """
+        msg = self.bot.formatter.format(
+            msg, channel=ctx.channel, recipient=ctx.thread.recipient, author=ctx.message.author
+        )
+        ctx.message.content = msg
+        async with ctx.typing():
+            await ctx.thread.reply(ctx.message, anonymous=True)
+
     @commands.command(aliases=["anonreply", "anonymousreply"])
     @checks.has_permissions(PermissionLevel.SUPPORTER)
     @checks.thread_only()
@@ -989,18 +1012,17 @@ class Modmail(commands.Cog):
             if self.bot.config["dm_disabled"] in (DMDisabled.NEW_THREADS, DMDisabled.ALL_THREADS):
                 logger.info("Contacting user %s when Modmail DM is disabled.", user)
 
-            if not silent:
+            if not silent and not self.bot.config.get("thread_contact_silently"):
                 if ctx.author.id == user.id:
                     description = "You have opened a Modmail thread."
                 else:
                     description = f"{ctx.author.name} has opened a Modmail thread."
 
                 em = discord.Embed(
-                    title="New Thread",
-                    description=description,
-                    color=self.bot.main_color,
-                    timestamp=datetime.utcnow(),
+                    title="New Thread", description=description, color=self.bot.main_color,
                 )
+                if self.bot.config["show_timestamp"]:
+                    em.timestamp = datetime.utcnow()
                 em.set_footer(icon_url=ctx.author.avatar_url)
                 await user.send(embed=em)
 
@@ -1028,8 +1050,30 @@ class Modmail(commands.Cog):
 
         roles = []
         users = []
+        now = ctx.message.created_at
 
-        for id_, reason in self.bot.blocked_users.items():
+        blocked_users = list(self.bot.blocked_users.items())
+        for id_, reason in blocked_users:
+            # parse "reason" and check if block is expired
+            # etc "blah blah blah... until 2019-10-14T21:12:45.559948."
+            end_time = re.search(r"until ([^`]+?)\.$", reason)
+            if end_time is None:
+                # backwards compat
+                end_time = re.search(r"%([^%]+?)%", reason)
+                if end_time is not None:
+                    logger.warning(
+                        r"Deprecated time message for user %s, block and unblock again to update.",
+                        id_,
+                    )
+
+            if end_time is not None:
+                after = (datetime.fromisoformat(end_time.group(1)) - now).total_seconds()
+                if after <= 0:
+                    # No longer blocked
+                    self.bot.blocked_users.pop(str(id_))
+                    logger.debug("No longer blocked, user %s.", id_)
+                    continue
+
             user = self.bot.get_user(int(id_))
             if user:
                 users.append((user.mention, reason))
@@ -1040,7 +1084,28 @@ class Modmail(commands.Cog):
                 except discord.NotFound:
                     users.append((id_, reason))
 
-        for id_, reason in self.bot.blocked_roles.items():
+        blocked_roles = list(self.bot.blocked_roles.items())
+        for id_, reason in blocked_roles:
+            # parse "reason" and check if block is expired
+            # etc "blah blah blah... until 2019-10-14T21:12:45.559948."
+            end_time = re.search(r"until ([^`]+?)\.$", reason)
+            if end_time is None:
+                # backwards compat
+                end_time = re.search(r"%([^%]+?)%", reason)
+                if end_time is not None:
+                    logger.warning(
+                        r"Deprecated time message for role %s, block and unblock again to update.",
+                        id_,
+                    )
+
+            if end_time is not None:
+                after = (datetime.fromisoformat(end_time.group(1)) - now).total_seconds()
+                if after <= 0:
+                    # No longer blocked
+                    self.bot.blocked_roles.pop(str(id_))
+                    logger.debug("No longer blocked, role %s.", id_)
+                    continue
+
             role = self.bot.guild.get_role(int(id_))
             if role:
                 roles.append((role.mention, reason))
@@ -1148,12 +1213,12 @@ class Modmail(commands.Cog):
     async def block(
         self,
         ctx,
-        user_or_role: Union[User, discord.Role] = None,
+        user_or_role: Optional[Union[User, discord.Role]] = None,
         *,
         after: UserFriendlyTime = None,
     ):
         """
-        Block a user from using Modmail.
+        Block a user or role from using Modmail.
 
         You may choose to set a time as to when the user will automatically be unblocked.
 
@@ -1168,9 +1233,9 @@ class Modmail(commands.Cog):
             if thread:
                 user_or_role = thread.recipient
             elif after is None:
-                raise commands.MissingRequiredArgument(SimpleNamespace(name="user"))
+                raise commands.MissingRequiredArgument(SimpleNamespace(name="user or role"))
             else:
-                raise commands.BadArgument(f'User "{after.arg}" not found.')
+                raise commands.BadArgument(f'User or role "{after.arg}" not found.')
 
         mention = getattr(user_or_role, "mention", f"`{user_or_role.id}`")
 
